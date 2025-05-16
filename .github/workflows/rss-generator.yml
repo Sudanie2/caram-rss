@@ -17,51 +17,7 @@ jobs:
 
       - name: Build RSS via Python
         run: |
-          python <<'PY'
-          import requests, datetime, email.utils, pathlib, html
-          from bs4 import BeautifulSoup
-
-          BASE_URL = "https://caram.ynu.ac.jp"
-          TOP_URL = BASE_URL + "/index.html"
-          r = requests.get(TOP_URL, timeout=20)
-          r.encoding = r.apparent_encoding  # ←この行が重要!!
-          print("[DEBUG] 取得HTML冒頭:", r.text[:500])
-          soup = BeautifulSoup(r.text, "lxml")
-
-          news_dl = soup.select_one("div.newslist dl")
-          if not news_dl:
-              print("ERROR: 新着情報ブロックが見つかりません")
-              exit(1)
-          dts = news_dl.find_all("dt")
-          dds = news_dl.find_all("dd")
-          items = []
-          for dt, dd in zip(dts, dds):
-              date_txt = dt.get_text(strip=True)
-              try:
-                  dt_parsed = datetime.datetime.strptime(date_txt, "%Y.%m.%d")
-              except:
-                  dt_parsed = datetime.datetime.utcnow()
-              pub = email.utils.format_datetime(dt_parsed)
-
-              a = dd.find("a")
-              title = a.get_text(strip=True) if a else dd.get_text(strip=True)
-              link = a["href"] if a and a.has_attr("href") else ""
-              if link and not link.startswith("http"):
-                  link = BASE_URL + "/" + link.lstrip("/")
-              items.append(f"<item><title>{html.escape(title)}</title><link>{link}</link><pubDate>{pub}</pubDate></item>")
-
-          rss = (
-              '<?xml version="1.0" encoding="UTF-8"?>'
-              '<rss version="2.0"><channel>'
-              '<title>URA育成教育研究センター 新着情報</title>'
-              f'<link>{TOP_URL}</link>'
-              '<description>横浜国立大学URAセンターの最新情報</description>'
-              + "".join(items) +
-              '</channel></rss>'
-          )
-          pathlib.Path("new_rss.xml").write_text(rss, encoding="utf-8")
-          print("[DEBUG] new_rss.xml created")
-          PY
+          # ↑ 上記のPythonコードをここにコピペ
 
       - name: Show files for debug
         run: ls -lhA
