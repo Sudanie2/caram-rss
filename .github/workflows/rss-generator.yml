@@ -2,7 +2,7 @@ name: Generate RSS Feed
 
 on:
   schedule:
-    - cron: '10 1 * * *'    # JST 10:10毎日
+    - cron: '10 1 * * *'
   workflow_dispatch:
 
 jobs:
@@ -24,6 +24,7 @@ jobs:
           BASE_URL = "https://caram.ynu.ac.jp"
           TOP_URL = BASE_URL + "/index.html"
           r = requests.get(TOP_URL, timeout=20)
+          print("[DEBUG] 取得HTML冒頭:", r.text[:500])
           soup = BeautifulSoup(r.text, "lxml")
 
           news_dl = soup.select_one("div.newslist dl")
