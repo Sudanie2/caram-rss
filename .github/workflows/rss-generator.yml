@@ -2,7 +2,7 @@ name: Generate RSS Feed
 
 on:
   schedule:
-    - cron: '10 1 * * *'
+    - cron: '10 1 * * *'      # JST 10:10毎日
   workflow_dispatch:
 
 jobs:
@@ -17,7 +17,72 @@ jobs:
 
       - name: Build RSS via Python
         run: |
-          # ↑ 上記のPythonコードをここにコピペ
+          python <<'PY'
+          import requests, datetime, email.utils, pathlib, html
+          from bs4 import BeautifulSoup
+
+          BASE_URL = "https://caram.ynu.ac.jp"
+          TOP_URL = BASE_URL + "/index.html"
+          r = requests.get(TOP_URL, timeout=20)
+          r.encoding = r.apparent_encoding
+          soup = BeautifulSoup(r.text, "lxml")
+
+          # デバッグ用：body構造を表示
+          print("[DEBUG] soup body:", soup.body.prettify()[:1000])
+
+          news_ul = soup.select_one("ul.news-list")
+          print("[DEBUG] news_ul:", news_ul)
+          if not news_ul:
+              print("ERROR: 新着情報ブロックが見つかりません")
+              exit(1)
+
+          lis = news_ul.find_all("li")
+          print(f"[DEBUG] li数: {len(lis)}")
+
+          items = []
+          for li in lis:
+              # 日付
+              date_span = li.find("span", class_="news-date")
+              date_txt = date_span.get_text(strip=True).replace(":", "") if date_span else ""
+              dt = None
+              for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"):
+                  try:
+                      dt = datetime.datetime.strptime(date_txt, fmt)
+                      break
+                  except:
+                      continue
+              if not dt:
+                  dt = datetime.datetime.utcnow()
+              pub = email.utils.format_datetime(dt)
+
+              # タイトル・リンク
+              text_span = li.find("span", class_="news-text")
+              a = text_span.find("a") if text_span else None
+              if a:
+                  title = a.get_text(strip=True)
+                  link = a["href"]
+                  if link and not link.startswith("http"):
+                      link = BASE_URL + "/" + link.lstrip("./")
+              else:
+                  title = text_span.get_text(strip=True) if text_span else li.get_text(strip=True)
+                  link = TOP_URL
+
+              items.append(
+                  f"<item><title>{html.escape(title)}</title><link>{link}</link><pubDate>{pub}</pubDate></item>"
+              )
+
+          rss = (
+              '<?xml version="1.0" encoding="UTF-8"?>'
+              '<rss version="2.0"><channel>'
+              '<title>URA育成教育研究センター 新着情報</title>'
+              f'<link>{TOP_URL}</link>'
+              '<description>横浜国立大学URAセンターの新着情報</description>'
+              + "".join(items) +
+              '</channel></rss>'
+          )
+          pathlib.Path("new_rss.xml").write_text(rss, encoding="utf-8")
+          print("[DEBUG] new_rss.xml created")
+          PY
 
       - name: Show files for debug
         run: ls -lhA
