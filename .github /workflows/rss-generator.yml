@@ -2,7 +2,7 @@ name: Generate URA RSS Feed
 
 on:
   schedule:
-    - cron: '10 1 * * *'        # JST 10:10 毎日
+    - cron: '10 1 * * *'      # JST 10:10 毎日
   workflow_dispatch:
 
 jobs:
@@ -22,39 +22,29 @@ jobs:
         from bs4 import BeautifulSoup
 
         BASE_URL = "https://caram.ynu.ac.jp"
-        TOP_URL  = f"{BASE_URL}/index.html"
-
+        TOP_URL  = BASE_URL + "/index.html"
         r = requests.get(TOP_URL, timeout=20)
         soup = BeautifulSoup(r.text, "lxml")
 
-        # ▼ 新着情報ブロックのセレクタは必要に応じて調整してください
-        # 例：id="news" または class="newsList" 等
-        news_list = soup.select_one("#news, .newsList, section.news") or soup
-
+        news_dl = soup.select_one("div.newslist dl")
+        if not news_dl:
+            raise RuntimeError("新着情報ブロックが見つかりません")
+        dts = news_dl.find_all("dt")
+        dds = news_dl.find_all("dd")
         items = []
-        for elem in news_list.find_all("li", limit=20):  # 直近20件まで
-            # タイトル取得
-            title = elem.get_text(strip=True)
-            # リンク取得
-            a = elem.find("a")
-            link = BASE_URL + a["href"] if a and a.has_attr("href") and a["href"].startswith("/") else (a["href"] if a else TOP_URL)
-            # 日付取得（例: <span class="date">2025/05/01</span> など）
-            date_txt = ""
-            date_span = elem.find(class_="date") or elem.find("time")
-            if date_span:
-                date_txt = date_span.get_text(strip=True)
-            # 日付をパース
-            dt = None
-            for fmt in ("%Y/%m/%d", "%Y-%m-%d"):
-                try:
-                    dt = datetime.datetime.strptime(date_txt, fmt)
-                    break
-                except:
-                    continue
-            if not dt:
-                dt = datetime.datetime.utcnow()
-            pub = email.utils.format_datetime(dt)
+        for dt, dd in zip(dts, dds):
+            date_txt = dt.get_text(strip=True)
+            try:
+                dt_parsed = datetime.datetime.strptime(date_txt, "%Y.%m.%d")
+            except:
+                dt_parsed = datetime.datetime.utcnow()
+            pub = email.utils.format_datetime(dt_parsed)
 
+            a = dd.find("a")
+            title = a.get_text(strip=True) if a else dd.get_text(strip=True)
+            link = a["href"] if a and a.has_attr("href") else ""
+            if link and not link.startswith("http"):
+                link = BASE_URL + "/" + link.lstrip("/")
             items.append(f"<item><title>{html.escape(title)}</title><link>{link}</link><pubDate>{pub}</pubDate></item>")
 
         rss = (
@@ -69,11 +59,9 @@ jobs:
         pathlib.Path("new_rss.xml").write_text(rss, encoding="utf-8")
         PY
 
-    - name: Check for changes & stage file
+    - name: Move & stage rss.xml
       run: |
-        if [ -f rss.xml ] && cmp -s new_rss.xml rss.xml; then
-          echo "No content change"; exit 0; fi
-        mv new_rss.xml rss.xml
+        mv -f new_rss.xml rss.xml
         git add rss.xml
 
     - name: Commit & push if changed
