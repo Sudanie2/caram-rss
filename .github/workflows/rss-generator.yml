@@ -24,7 +24,7 @@ jobs:
           BASE_URL = "https://caram.ynu.ac.jp"
           TOP_URL = BASE_URL + "/index.html"
           r = requests.get(TOP_URL, timeout=20)
-          r.encoding = r.apparent_encoding  # ★文字化け対策（自動エンコ判定）
+          r.encoding = r.apparent_encoding  # ←この行が重要!!
           print("[DEBUG] 取得HTML冒頭:", r.text[:500])
           soup = BeautifulSoup(r.text, "lxml")
 
